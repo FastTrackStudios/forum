@@ -155,8 +155,10 @@ First-run checklist, in the cluster repo:
 5. **Ingress target.** The external-dns annotation comes from
    `constants.tunnelTarget` in the cluster module, so the hostname resolves
    through the Cloudflare tunnel.
-6. **Repo credential.** This repo is private, so Argo CD needs a read-only
-   deploy key registered as a repository secret before it can read the chart.
+6. **Argo CD access.** This repo is public, like `fts-auth`, so Argo reads the
+   chart without a credential. Nothing secret is in here — the secrets are all
+   cluster-side, which is what makes that safe. Keep it that way: no SMTP
+   credentials, no client secret, no `secret_key_base` in this tree, ever.
 
 ## Backups
 
