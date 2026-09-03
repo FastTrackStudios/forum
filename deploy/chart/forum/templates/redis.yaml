@@ -1,0 +1,101 @@
+{{- if .Values.redis.enabled }}
+# Discourse's Redis is two things at once: a cache it can lose, and the
+# sidekiq queue it cannot lose mid-job. Hence a PVC (so a restart does not
+# drop scheduled jobs) on local-path (so it is fast and node-local) rather
+# than the NAS.
+#
+# There is no Redis chart in nixhelm, which is the cluster's chart source,
+# so this is written out rather than pulled in. It is ~40 lines; a
+# dependency would not be smaller.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forum-redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.redis.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forum-redis
+  labels:
+    app: forum-redis
+spec:
+  selector:
+    app: forum-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forum-redis
+  labels:
+    app: forum-redis
+spec:
+  replicas: 1
+  strategy:
+    # RWO volume: the new pod cannot attach until the old one lets go.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forum-redis
+  template:
+    metadata:
+      labels:
+        app: forum-redis
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image | quote }}
+          args:
+            - --save
+            - "60"
+            - "1"
+            - --appendonly
+            - "no"
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 20
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: forum-redis
+{{- end }}

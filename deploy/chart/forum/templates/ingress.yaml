@@ -1,0 +1,27 @@
+{{- if .Values.ingress.enabled }}
+# Nothing in this cluster watches Ingress objects — nix is the routing
+# control plane, and the Caddy ingress renders the route table from
+# `starcommand.cluster.routes`. This object exists so external-dns has a
+# record source for the hostname.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forum
+  annotations:
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forum
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
+{{- end }}

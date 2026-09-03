@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forum
+  labels:
+    app: forum
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    # Recreate, not RollingUpdate. The uploads PVC is ReadWriteMany so two
+    # pods CAN mount it, but a rolling update would start the new pod's
+    # `db:migrate` while the old pod is still serving the old schema. A few
+    # seconds of downtime on a forum is cheaper than that.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: forum
+  template:
+    metadata:
+      labels:
+        app: forum
+      annotations:
+        checksum/secret-name: {{ .Values.secretName | sha256sum }}
+    spec:
+      # k8s injects <SVC>_PORT=tcp://… for every service in the namespace;
+      # they collide with app config.
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        # The NFS volume arrives root-owned; without this the non-root
+        # process cannot write uploads.
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: forum
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+          env:
+            - name: DISCOURSE_HOSTNAME
+              value: {{ .Values.hostname | quote }}
+            - name: DISCOURSE_SERVE_STATIC_ASSETS
+              value: {{ .Values.serveStaticAssets | quote }}
+
+            - name: UNICORN_WORKERS
+              value: {{ .Values.unicorn.workers | quote }}
+            - name: UNICORN_SIDEKIQS
+              value: {{ .Values.unicorn.sidekiqs | quote }}
+            - name: UNICORN_TIMEOUT
+              value: {{ .Values.unicorn.timeout | quote }}
+            # Ruby's allocator fragments badly across unicorn forks; the
+            # upstream image sets the same cap.
+            - name: MALLOC_ARENA_MAX
+              value: "2"
+
+            - name: DISCOURSE_DB_HOST
+              value: {{ .Values.database.host | quote }}
+            - name: DISCOURSE_DB_PORT
+              value: {{ .Values.database.port | quote }}
+            - name: DISCOURSE_DB_NAME
+              value: {{ .Values.database.name | quote }}
+            - name: DISCOURSE_DB_USERNAME
+              value: {{ .Values.database.username | quote }}
+            - name: DISCOURSE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: database-password
+
+            - name: DISCOURSE_REDIS_HOST
+              value: forum-redis
+
+            - name: DISCOURSE_SMTP_ADDRESS
+              value: {{ .Values.mail.address | quote }}
+            - name: DISCOURSE_SMTP_PORT
+              value: {{ .Values.mail.port | quote }}
+            - name: DISCOURSE_SMTP_DOMAIN
+              value: {{ .Values.mail.domain | quote }}
+            - name: DISCOURSE_SMTP_AUTHENTICATION
+              value: {{ .Values.mail.authentication | quote }}
+            - name: DISCOURSE_SMTP_ENABLE_START_TLS
+              value: {{ .Values.mail.enableStartTls | quote }}
+            - name: DISCOURSE_SMTP_FORCE_TLS
+              value: {{ .Values.mail.forceTls | quote }}
+            - name: DISCOURSE_NOTIFICATION_EMAIL
+              value: {{ .Values.mail.notificationEmail | quote }}
+            - name: DISCOURSE_SMTP_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: smtp-username
+            - name: DISCOURSE_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: smtp-password
+
+            # Rotating this invalidates every session and every signed
+            # cookie on the forum. It is not derived from AUTH_SECRET —
+            # they are separate blast radii on purpose.
+            - name: DISCOURSE_SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: secret-key-base
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/discourse
+            # Sprockets and image processing churn through tmp. On NFS that
+            # is slow enough to trip the unicorn timeout, so it is local.
+            - name: tmp
+              mountPath: /var/lib/discourse/tmp
+            - name: runtime
+              mountPath: /run/discourse
+            - name: logs
+              mountPath: /var/log/discourse
+          # Discourse boots slowly — migrations, then unicorn forking its
+          # workers. 10 minutes of startup budget before liveness begins
+          # counting; a first boot on an empty database uses most of it.
+          startupProbe:
+            httpGet:
+              path: /srv/status
+              port: http
+            failureThreshold: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /srv/status
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /srv/status
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 10
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            # NOT readOnlyRootFilesystem: the entrypoint has to seed
+            # /run/discourse from the store on every boot, and Discourse
+            # writes into its own tmp tree throughout.
+            readOnlyRootFilesystem: false
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: forum-state
+        - name: tmp
+          emptyDir: {}
+        - name: runtime
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}

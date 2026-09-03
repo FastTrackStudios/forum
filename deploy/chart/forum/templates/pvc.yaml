@@ -1,0 +1,18 @@
+# Uploads and backups. Everything else the forum knows is in Postgres, and
+# Postgres deliberately does not live here — CNPG keeps its data on
+# local-path NVMe (see the cluster's `databases` service). This is the one
+# volume whose loss cannot be recovered from a pg_dump.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forum-state
+  annotations:
+    # A render bug must never be able to delete the uploads.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.storage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}

@@ -1,0 +1,99 @@
+# Defaults are the shape of the thing, not the deployment. The cluster
+# overrides host/image/mail from the starcommand service module
+# (modules/services/forum), which is the single source of truth for what
+# actually runs.
+
+image:
+  registry: registry.starcommand.live:30050
+  repository: forum
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ONE. Not a scaling decision — a correctness one. Two pods race
+# `db:migrate` on boot, and unicorn_launcher forks the sidekiq workers
+# in-process, so a second replica doubles the background workers against
+# the same queues. Scale by raising unicornWorkers/sidekiqs, or split
+# sidekiq into its own Deployment first (see README).
+replicaCount: 1
+
+hostname: forum.fasttrackstudio.app
+
+service:
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - forum.fasttrackstudio.app
+  annotations: {}
+
+# Rails serves public/assets itself. The NixOS module puts nginx in front
+# to do this; in the cluster Caddy is the only proxy and it does not know
+# the asset tree, so Discourse has to serve it.
+serveStaticAssets: true
+
+unicorn:
+  workers: 3
+  sidekiqs: 1
+  timeout: 30
+
+database:
+  host: pg-main-rw.databases.svc
+  port: 5432
+  name: discourse
+  username: discourse
+
+redis:
+  # In-namespace, single replica, its own PVC. Discourse treats Redis as a
+  # cache AND as the sidekiq queue, so losing it drops scheduled jobs but
+  # not content — which is why this is local-path and not the NAS.
+  enabled: true
+  image: docker.io/library/redis:7.4-alpine
+  storageClass: local-path
+  size: 2Gi
+
+storage:
+  # Uploads and backups — the only forum data that is not in Postgres.
+  # NFS because it must outlive the node; Postgres deliberately does not
+  # live here (see the databases service).
+  storageClass: nas-nfs
+  size: 20Gi
+
+mail:
+  # Discourse cannot finish its own install without working outbound mail:
+  # the admin activation email is step one. There is no in-cluster relay,
+  # so this points at a transactional provider.
+  address: ""
+  port: 587
+  # The envelope domain, which must match the DKIM/SPF records at the
+  # provider — NOT necessarily the forum hostname.
+  domain: fasttrackstudio.app
+  authentication: plain
+  enableStartTls: true
+  forceTls: false
+  notificationEmail: noreply@fasttrackstudio.app
+
+# Single sign-on against auth.fasttrackstudio.app. The client secret is in
+# the secret named below; everything else is public configuration.
+#
+# These land as Discourse SITE settings, not backend settings, so they are
+# applied once at bootstrap and are then editable in /admin. They are kept
+# here so a rebuilt-from-scratch forum comes up already federated.
+oauth2:
+  enabled: true
+  clientId: forum
+  issuer: https://auth.fasttrackstudio.app
+
+# Secret holding `secret-key-base`, `database-password`, `smtp-password`
+# and `oauth2-client-secret`. Delivered by the cluster secrets app; never
+# committed.
+secretName: forum-secrets
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    memory: 4Gi

@@ -1,0 +1,97 @@
+# Deploys the forum.
+#
+#   nix build .#image -> registry.starcommand.live:30050/forum:{latest,sha-…}
+#
+# Runs on the SELF-HOSTED runner labeled `nix-host` (THEBATTLESHIP): the
+# in-cluster registry is LAN-only and unreachable from GitHub-hosted
+# runners.
+#
+# NO DOCKER ANYWHERE. That runner executes as the `github-runner` user,
+# which has no docker on PATH and is not in the `docker` group — putting it
+# there would hand CI effectively-root access to the workstation. This is
+# also the reason Discourse is built from nixpkgs rather than bootstrapped
+# with `launcher`, which needs a daemon. The image is an ordinary Nix
+# derivation (dockerTools.streamLayeredImage, see nix/image.nix) streamed
+# straight into skopeo. Same shape as fts-auth.
+#
+# argocd-image-updater (digest strategy on the `latest` tag) rolls the
+# Deployment; "Verify live" then polls /srv/status until the cluster
+# answers, so a green run means deployed, not merely pushed.
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel a deploy mid-push; queue instead. A half-rolled forum with a
+# migrated database and an old image is the worst state to be in.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: registry.starcommand.live:30050
+  IMAGE: forum
+  # Newer skopeo rejects the host's v1 registries.conf; we name the registry
+  # explicitly everywhere, so use an empty (valid) config.
+  CONTAINERS_REGISTRIES_CONF: /dev/null
+  VERIFY_URL: https://forum.fasttrackstudio.app
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, nix-host]
+    environment:
+      name: production
+      url: https://forum.fasttrackstudio.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: tags
+        run: echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        id: image
+        env:
+          FTS_REV: ${{ github.sha }}
+          FTS_TAG: latest
+        run: |
+          set -euo pipefail
+          # --impure: nix/image.nix reads the tag/rev from the environment.
+          # Everything else about the image is pinned by flake.lock.
+          streamer="$(nix build --impure --no-link --print-out-paths .#image)"
+          echo "streamer=$streamer" >> "$GITHUB_OUTPUT"
+
+      - name: Push image
+        run: |
+          set -euo pipefail
+          "${{ steps.image.outputs.streamer }}" | nix develop --command skopeo \
+            --insecure-policy copy --dest-tls-verify=false --dest-no-creds \
+            docker-archive:/dev/stdin \
+            "docker://${REGISTRY}/${IMAGE}:latest"
+          nix develop --command skopeo \
+            --insecure-policy copy \
+            --src-tls-verify=false --src-no-creds \
+            --dest-tls-verify=false --dest-no-creds \
+            "docker://${REGISTRY}/${IMAGE}:latest" \
+            "docker://${REGISTRY}/${IMAGE}:${{ steps.tags.outputs.sha }}"
+
+      - name: Verify live
+        run: |
+          echo "waiting for ${VERIFY_URL} to answer"
+          # Generous: the pod runs db:migrate before it serves anything, and
+          # a migration that touches a large posts table is not quick.
+          for i in $(seq 1 80); do
+            body="$(curl -sf --max-time 10 "${VERIFY_URL}/srv/status" || true)"
+            echo "  poll $i: ${body:-?}"
+            if [ -n "$body" ]; then
+              echo "LIVE: ${VERIFY_URL}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "TIMED OUT: ${VERIFY_URL} never answered"
+          echo "check argocd-image-updater and the forum Application"
+          exit 1

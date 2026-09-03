@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forum
+  labels:
+    app: forum
+spec:
+  selector:
+    app: forum
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
