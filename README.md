@@ -178,6 +178,32 @@ only after the issuer verifies email.
 Once SSO works, turn `enable_local_logins` off so the forum has exactly one
 door.
 
+## Theme
+
+`theme/` holds the FastTrackStudio look: `common.scss` plus an idempotent
+`apply.rb` that creates the colour scheme, theme and uploads and sets it
+default. Applied with the assets staged in the pod:
+
+```sh
+kubectl -n forum cp <asset> forum/<pod>:/tmp/fts-theme/
+kubectl -n forum exec -i deploy/forum --   env TMPDIR=/tmp/discourse bundle exec rails runner - < theme/apply.rb
+```
+
+`TMPDIR` is required: `kubectl exec` starts a fresh process that does not
+inherit the one the entrypoint exports, and rake dies without it.
+
+The palette and type roles are lifted from `fasttrackstudio.app`'s
+`src/styles/{theme,base,fonts}.css` — that file is the source of truth, and
+these move when it moves. Archivo is uploaded to this forum and served from
+its own origin, matching the site's no-CDN stance; JetBrains Mono already
+ships with Discourse.
+
+Chrome is greyscale on purpose. Signal green, Session blue, Ignition amber
+and Keyflow purple mean "this product" and nothing else, so a forum serving
+all of them gets none of them in its furniture — hierarchy comes from
+weight, spacing and rules. Only danger/success/love keep colour, because "your
+post failed" is not a branding decision.
+
 ## Deploying
 
 Argo CD syncs `deploy/chart/forum`. Image builds run on push to `main` (see
