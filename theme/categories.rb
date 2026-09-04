@@ -39,17 +39,19 @@ def text_for(hex)
 end
 
 PRODUCTS = [
-  {
-    slug: "signal",
-    name: "Signal",
-    color: "2fd673",
-    description: "The Signal Suite — the audio engine, instrument rigs, sampler, and the CLAP/VST3 plugin set.",
-  },
+  # Order is presentation order everywhere: the categories page, the
+  # positions written below, and the sidebar. Session leads.
   {
     slug: "session",
     name: "Session",
     color: "2e9bff",
     description: "Setlists, songs, notation, the guide, and the Session app that runs the show.",
+  },
+  {
+    slug: "signal",
+    name: "Signal",
+    color: "2fd673",
+    description: "The Signal Suite — the audio engine, instrument rigs, sampler, and the CLAP/VST3 plugin set.",
   },
   {
     slug: "ignition",
