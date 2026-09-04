@@ -181,6 +181,13 @@ def upsert(name:, slug:, color:, description:, parent: nil, admin:)
   category
 end
 
+# Discourse only honours `position` when told to; left alone it orders
+# categories by activity, which would shuffle these three around as people
+# post. The order here is the shape of the conversation — talk about it,
+# ask for something, report a fault — and it should not move.
+SiteSetting.fixed_category_positions = true
+position = 0
+
 PRODUCTS.each do |product|
   parent =
     upsert(
@@ -190,6 +197,7 @@ PRODUCTS.each do |product|
       description: product[:description],
       admin: admin,
     )
+  parent.update_column(:position, position += 1)
 
   kids =
     CHILDREN.map do |child|
@@ -203,10 +211,24 @@ PRODUCTS.each do |product|
           parent: parent,
           admin: admin,
         )
+      c.update_column(:position, position += 1)
       "#{c.slug}=##{c.color}/#{apply_type(c, child[:type], admin)}"
     end
 
   log("#{parent.name} ##{parent.color} style=#{parent.style_type}/#{parent.emoji.inspect} -> #{kids.join(" ")}")
+end
+
+# ── Everything that is not a product ─────────────────────────────────────
+# The stock categories sort BELOW the four products, in this order. They
+# are housekeeping: someone arriving at a product forum is here about a
+# product, and General/Site Feedback/Staff are where the leftovers go.
+# Listed by slug and positioned only if present, so a Discourse that seeds
+# a different set does not break this.
+%w[general site-feedback staff].each do |slug|
+  c = Category.find_by(slug: slug, parent_category_id: nil)
+  next unless c
+  c.update_column(:position, position += 1)
+  log("trailing #{slug} position=#{c.position}")
 end
 
 # ── The landing page ─────────────────────────────────────────────────────
