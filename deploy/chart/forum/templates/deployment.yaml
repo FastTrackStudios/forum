@@ -129,6 +129,14 @@ spec:
             # is slow enough to trip the unicorn timeout, so it is local.
             - name: tmp
               mountPath: /var/lib/discourse/tmp
+            # Ruby's Dir.tmpdir tries $TMPDIR, then /tmp, then the cwd —
+            # and a scratch image has no /tmp while the cwd is the
+            # read-only Nix store, so `db:migrate` died with
+            #   ArgumentError: could not find a temporary directory
+            # The kubelet creates the mount point, so this fixes it
+            # without an image rebuild.
+            - name: scratch
+              mountPath: /tmp
             - name: runtime
               mountPath: /run/discourse
             - name: logs
@@ -169,6 +177,8 @@ spec:
           persistentVolumeClaim:
             claimName: forum-state
         - name: tmp
+          emptyDir: {}
+        - name: scratch
           emptyDir: {}
         - name: runtime
           emptyDir: {}

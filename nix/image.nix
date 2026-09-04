@@ -84,6 +84,12 @@ pkgs.dockerTools.streamLayeredImage {
   fakeRootCommands = ''
     mkdir -p ./run/discourse ./var/lib/discourse ./var/log/discourse
     chown -R 1000:1000 ./run/discourse ./var/lib/discourse ./var/log/discourse
+    # Ruby's Dir.tmpdir falls back through $TMPDIR, /tmp and the cwd. A
+    # scratch image has none of them writable — the cwd is this store
+    # path — and rake dies with "could not find a temporary directory".
+    # The chart also mounts an emptyDir here; this makes the image
+    # correct on its own.
+    mkdir -p ./tmp && chmod 1777 ./tmp
   '';
   enableFakechroot = true;
 
