@@ -51,6 +51,22 @@ ln -sfn /var/lib/discourse/backups /run/discourse/public/backups
 # Discourse generates images into this directory; the dist copy is u=rx.
 chmod 750 /run/discourse/public/images
 
+# ── A temporary directory Ruby will accept ───────────────────────────────
+# Ruby's Dir.tmpdir walks $TMPDIR, /tmp and the cwd, and REJECTS any
+# candidate that is world-writable without the sticky bit. An emptyDir
+# mount is 0777 with no sticky bit and is owned by root, so the container
+# cannot chmod it — which is why merely HAVING a /tmp was not enough:
+#
+#   /tmp is world-writable: /tmp
+#   . is not writable: /nix/store/...-discourse/share/discourse
+#   rake aborted! ArgumentError: could not find a temporary directory
+#
+# A subdirectory we create ourselves is owned by us and 0700, so it
+# passes. Everything Ruby does — including the schema load — goes here.
+export TMPDIR=/tmp/discourse
+mkdir -p "$TMPDIR"
+chmod 700 "$TMPDIR"
+
 # ── Site settings ────────────────────────────────────────────────────────
 # nixpkgs PATCHES Discourse to load this file as an extra site-settings
 # source (app/models/site_setting.rb -> SiteSettings::YamlLoader), and it
