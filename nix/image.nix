@@ -39,6 +39,17 @@ let
   # Only the client is used.
   psql = pkgs.postgresql_16;
 
+  # The theme, in the image. Configuring it by hand leaves it living only
+  # in the database: a rebuilt forum comes up as stock Discourse, and the
+  # assets I staged in a pod's /tmp vanish with the pod. Shipping it here
+  # makes the look part of the deployment, and the entrypoint reapplies it
+  # on every boot.
+  themeDir = pkgs.runCommand "forum-theme" { } ''
+    mkdir -p $out
+    cp ${../theme}/*.scss ${../theme}/*.rb $out/
+    cp ${../theme/assets}/* $out/
+  '';
+
   entrypoint = pkgs.writeShellApplication {
     name = "forum-entrypoint";
     runtimeInputs = [
@@ -102,6 +113,7 @@ pkgs.dockerTools.streamLayeredImage {
       "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
       "DISCOURSE_ROOT=${discourse}"
       "DISCOURSE_ASSETS_GENERATED=${discourse.assets.generated}"
+      "FORUM_THEME_DIR=${themeDir}"
       "RAILS_ENV=production"
       "HOME=/run/discourse/home"
       # The NixOS module has nginx in front and talks to unicorn over a unix

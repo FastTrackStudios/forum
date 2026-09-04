@@ -103,6 +103,25 @@ fi
 # theme repository would turn into a crash-looping pod. Run it by hand:
 #   kubectl -n forum exec deploy/forum -- discourse-rake themes:update
 
+# ── The FastTrackStudio look ─────────────────────────────────────────────
+# Reapplied on every boot, not configured once by hand. All three scripts
+# are idempotent, so this converges rather than accumulating: a forum
+# rebuilt from an empty database comes up already themed, with its product
+# categories, instead of as stock Discourse.
+#
+# emoji.rb runs as its OWN process and first. Category#emoji is validated
+# by `Emoji.exists?`, which reads a per-process memo, so an emoji created
+# and assigned in one run fails validation for an emoji that provably
+# exists a line earlier — and Emoji.clear_cache does not help.
+#
+# Set FORUM_APPLY_THEME=0 to boot without touching any of it.
+if [ "${FORUM_APPLY_THEME:-1}" = "1" ] && [ -d "${FORUM_THEME_DIR:-}" ]; then
+  echo "entrypoint: applying theme from $FORUM_THEME_DIR"
+  bundle exec rails runner "$FORUM_THEME_DIR/emoji.rb" || echo "entrypoint: emoji step failed, continuing"
+  bundle exec rails runner "$FORUM_THEME_DIR/apply.rb" || echo "entrypoint: theme step failed, continuing"
+  bundle exec rails runner "$FORUM_THEME_DIR/categories.rb" || echo "entrypoint: categories step failed, continuing"
+fi
+
 echo "entrypoint: starting unicorn (sidekiqs=${UNICORN_SIDEKIQS:-1})"
 cd "$DISCOURSE_ROOT/share/discourse"
 # unicorn_launcher supervises BOTH unicorn and the sidekiq workers, which

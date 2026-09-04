@@ -9,7 +9,10 @@
 # with "Validation failed: Emoji is invalid" for an emoji that demonstrably
 # exists a line earlier. Creating them in a separate process is the whole
 # reason this file is not part of categories.rb.
-ASSETS = "/tmp/fts-theme"
+# Baked into the image; see nix/image.nix. The old hand-staged
+# /tmp/fts-theme is still honoured so the scripts can be run
+# against a pod by hand while iterating.
+ASSETS = ENV.fetch("FORUM_THEME_DIR", "/tmp/fts-theme")
 admin = User.find_by(admin: true) || Discourse.system_user
 
 %w[signal session ignition keyflow].each do |slug|

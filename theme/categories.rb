@@ -14,7 +14,10 @@
 # from that app's shipped icon — so the category badge, the icon above it
 # and the beam lighting it on the marketing site are all one colour.
 
-ASSETS = "/tmp/fts-theme"
+# Baked into the image; see nix/image.nix. The old hand-staged
+# /tmp/fts-theme is still honoured so the scripts can be run
+# against a pod by hand while iterating.
+ASSETS = ENV.fetch("FORUM_THEME_DIR", "/tmp/fts-theme")
 
 def log(msg) = STDOUT.puts("RESULT #{msg}")
 

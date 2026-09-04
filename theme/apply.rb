@@ -14,7 +14,10 @@
 # The palette is lifted from fasttrackstudio.app's src/styles/theme.css.
 # When those tokens move, move these.
 
-ASSETS = "/tmp/fts-theme"
+# Baked into the image; see nix/image.nix. The old hand-staged
+# /tmp/fts-theme is still honoured so the scripts can be run
+# against a pod by hand while iterating.
+ASSETS = ENV.fetch("FORUM_THEME_DIR", "/tmp/fts-theme")
 
 def log(msg) = STDOUT.puts("RESULT #{msg}")
 

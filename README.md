@@ -192,6 +192,18 @@ kubectl -n forum exec -i deploy/forum --   env TMPDIR=/tmp/discourse bundle exec
 `TMPDIR` is required: `kubectl exec` starts a fresh process that does not
 inherit the one the entrypoint exports, and rake dies without it.
 
+**The theme is part of the image, and reapplied on every boot.** `theme/`
+— stylesheet, scripts and assets — is copied into the store by
+`nix/image.nix`, exposed as `FORUM_THEME_DIR`, and run by the entrypoint
+after migrations. All three scripts are idempotent, so this converges: a
+forum rebuilt from an empty database comes up already themed and
+categorised rather than as stock Discourse. `FORUM_APPLY_THEME=0` boots
+without touching any of it.
+
+That indirection exists because the first version of this was applied by
+hand with assets staged in a pod's `/tmp` — which vanish with the pod, and
+leave the look existing only as rows in a database nobody can rebuild.
+
 `theme/emoji.rb` then `theme/categories.rb` build the product categories —
 Signal, Session, Ignition and Keyflow, each with Feature Requests and
 Support beneath it. Run emoji.rb FIRST and as its own process:
