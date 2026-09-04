@@ -1,0 +1,120 @@
+{{- if .Values.seed.enabled }}
+# Category, emoji, form-template and tag seeding — as an Argo CD PostSync
+# hook, not as part of starting the app.
+#
+# This used to run in the entrypoint on every pod boot, which was wrong in
+# two ways. It coupled "the site is up" to "configuration has converged",
+# so enabling two plugins took the forum down for three minutes; and it
+# re-ran identical work on every restart, including restarts that had
+# nothing to do with configuration.
+#
+# A PostSync hook runs after Argo has synced a change — which is exactly
+# when the desired configuration can differ — and never on an ordinary pod
+# restart. The scripts stay idempotent, so a re-sync that changes nothing
+# converges to the same place.
+#
+# Deliberately NOT a PreSync hook: the seed talks to the app's database
+# through the app's own code, so it needs the schema the new image
+# migrates to, which only exists once that image is running.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: forum-seed
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    # Replace rather than accumulate a Job per sync. The alternative,
+    # HookSucceeded, deletes the Job on success and takes its logs with
+    # it — and the logs are the only record of what the seed decided.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # One attempt, then fail visibly. A seed that quietly retries forever
+  # looks like it worked.
+  backoffLimit: 1
+  # Do not let a wedged seed hold a sync open indefinitely.
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app: forum-seed
+    spec:
+      restartPolicy: Never
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: "{{ if contains "/" .Values.image.repository }}{{ .Values.image.repository }}{{ else }}{{ .Values.image.registry }}/{{ .Values.image.repository }}{{ end }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image's own entrypoint, in seed mode. It builds the same
+          # runtime scaffolding a serving pod needs — the config tree from
+          # config.dist, nixos_site_settings.json, a TMPDIR Ruby accepts —
+          # then runs the scripts and exits. Duplicating that here would
+          # drift from it.
+          env:
+            - name: FORUM_MODE
+              value: seed
+            - name: DISCOURSE_DB_HOST
+              value: {{ .Values.database.host | quote }}
+            - name: DISCOURSE_DB_PORT
+              value: {{ .Values.database.port | quote }}
+            - name: DISCOURSE_DB_NAME
+              value: {{ .Values.database.name | quote }}
+            - name: DISCOURSE_DB_USERNAME
+              value: {{ .Values.database.username | quote }}
+            - name: DISCOURSE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: database-password
+            - name: DISCOURSE_REDIS_HOST
+              value: forum-redis
+            - name: DISCOURSE_HOSTNAME
+              value: {{ .Values.hostname | quote }}
+            - name: DISCOURSE_SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: secret-key-base
+            - name: FORUM_SITE_SETTINGS_JSON
+              value: {{ .Values.siteSettings | toJson | quote }}
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/discourse
+            - name: tmp
+              mountPath: /var/lib/discourse/tmp
+            - name: runtime
+              mountPath: /run/discourse
+            - name: scratch
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/discourse
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        # Its own scratch copies, not the app's: this Job must never be
+        # able to disturb a running forum's working directories.
+        - name: state
+          persistentVolumeClaim:
+            claimName: forum-state
+        - name: tmp
+          emptyDir: {}
+        - name: runtime
+          emptyDir: {}
+        - name: scratch
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+{{- end }}

@@ -87,7 +87,7 @@ printf '%s' "${FORUM_SITE_SETTINGS_JSON:-{\}}" > /run/discourse/config/nixos_sit
 # a single replica today, but a second one racing `db:migrate` corrupts the
 # schema_migrations table. Set FORUM_RUN_MIGRATIONS=0 on any pod that is
 # not the migrator.
-if [ "${FORUM_RUN_MIGRATIONS:-1}" = "1" ]; then
+if [ "${FORUM_RUN_MIGRATIONS:-1}" = "1" ] && [ "${FORUM_MODE:-serve}" != "seed" ]; then
   echo "entrypoint: running db:migrate"
   discourse-rake db:migrate
   # Best-effort. The NixOS unit owns this directory outright; here it is
@@ -103,36 +103,31 @@ fi
 # theme repository would turn into a crash-looping pod. Run it by hand:
 #   kubectl -n forum exec deploy/forum -- discourse-rake themes:update
 
-# ── The FastTrackStudio look ─────────────────────────────────────────────
-# Reapplied on every boot, not configured once by hand. All three scripts
-# are idempotent, so this converges rather than accumulating: a forum
-# rebuilt from an empty database comes up already themed, with its product
-# categories, instead of as stock Discourse.
+# ── Seed mode ────────────────────────────────────────────────────────────
+# `FORUM_MODE=seed` runs the configuration scripts and exits, without
+# starting a web server. That is how the Argo PostSync hook Job invokes
+# this image (deploy/chart/forum/templates/seed-job.yaml).
 #
-# emoji.rb runs as its OWN process and first. Category#emoji is validated
-# by `Emoji.exists?`, which reads a per-process memo, so an emoji created
-# and assigned in one run fails validation for an emoji that provably
-# exists a line earlier — and Emoji.clear_cache does not help.
+# It shares this file rather than re-implementing the scaffolding above,
+# because everything the scripts need — the config tree seeded from
+# config.dist, nixos_site_settings.json, a TMPDIR Ruby will accept — is
+# set up there, and two copies of that would drift.
 #
-# Set FORUM_APPLY_THEME=0 to boot without touching any of it.
-# Runs in the BACKGROUND, after unicorn is told to start. Three Rails
-# boots is roughly two minutes, and blocking on them meant every restart —
-# including one triggered by toggling a plugin from the admin UI — took the
-# forum down for that whole window with a 502. The theme converging a
-# minute after the site is back is a far better trade than the site being
-# gone until the theme is perfect.
-#
-# The scripts are idempotent, so on an already-configured forum this is a
-# no-op that nobody sees. On a genuinely fresh database the first minute
-# looks like stock Discourse and then corrects itself.
-if [ "${FORUM_APPLY_THEME:-1}" = "1" ] && [ -d "${FORUM_THEME_DIR:-}" ]; then
-  (
-    echo "entrypoint: applying theme from $FORUM_THEME_DIR (background)"
-    bundle exec rails runner "$FORUM_THEME_DIR/emoji.rb" || echo "entrypoint: emoji step failed, continuing"
-    bundle exec rails runner "$FORUM_THEME_DIR/apply.rb" || echo "entrypoint: theme step failed, continuing"
-    bundle exec rails runner "$FORUM_THEME_DIR/categories.rb" || echo "entrypoint: categories step failed, continuing"
-    echo "entrypoint: theme applied"
-  ) &
+# Seeding NO LONGER happens on boot. It used to, and that coupled "the
+# site is up" to "configuration has converged": enabling two plugins took
+# the forum down for three minutes, and every unrelated restart re-ran
+# identical work. Configuration changes on deploy, so it converges on
+# deploy.
+if [ "${FORUM_MODE:-serve}" = "seed" ]; then
+  echo "entrypoint: seeding from $FORUM_THEME_DIR"
+  # emoji.rb first, and as its own process: Category#emoji is validated by
+  # Emoji.exists?, which reads a per-process memo, so an emoji created and
+  # assigned in one run fails for an emoji that exists a line earlier.
+  bundle exec rails runner "$FORUM_THEME_DIR/emoji.rb"
+  bundle exec rails runner "$FORUM_THEME_DIR/apply.rb"
+  bundle exec rails runner "$FORUM_THEME_DIR/categories.rb"
+  echo "entrypoint: seed complete"
+  exit 0
 fi
 
 echo "entrypoint: starting unicorn (sidekiqs=${UNICORN_SIDEKIQS:-1})"

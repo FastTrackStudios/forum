@@ -192,17 +192,26 @@ kubectl -n forum exec -i deploy/forum --   env TMPDIR=/tmp/discourse bundle exec
 `TMPDIR` is required: `kubectl exec` starts a fresh process that does not
 inherit the one the entrypoint exports, and rake dies without it.
 
-**The theme is part of the image, and reapplied on every boot.** `theme/`
-— stylesheet, scripts and assets — is copied into the store by
-`nix/image.nix`, exposed as `FORUM_THEME_DIR`, and run by the entrypoint
-after migrations. All three scripts are idempotent, so this converges: a
-forum rebuilt from an empty database comes up already themed and
-categorised rather than as stock Discourse. `FORUM_APPLY_THEME=0` boots
-without touching any of it.
+**The theme is part of the image, and applied on DEPLOY — not on boot.**
+`theme/` is copied into the store by `nix/image.nix` and exposed as
+`FORUM_THEME_DIR`. An Argo CD **PostSync hook Job** runs the same image
+with `FORUM_MODE=seed`, which builds the runtime scaffolding, runs the
+three scripts, and exits.
 
-That indirection exists because the first version of this was applied by
-hand with assets staged in a pod's `/tmp` — which vanish with the pod, and
-leave the look existing only as rows in a database nobody can rebuild.
+It used to run in the entrypoint on every pod boot. That was wrong twice
+over: it coupled "the site is up" to "configuration has converged" — so
+enabling two plugins took the forum down for three minutes — and it re-ran
+identical work on every unrelated restart. Configuration changes on
+deploy, so it converges on deploy.
+
+Seed mode shares `entrypoint.sh` rather than re-implementing the
+scaffolding, because everything the scripts need (the config tree from
+`config.dist`, `nixos_site_settings.json`, a TMPDIR Ruby will accept) is
+built there, and a second copy would drift.
+
+Site settings are separate and need no script at all: nixpkgs patches
+Discourse to read `nixos_site_settings.json`, so the chart's
+`siteSettings` value is genuinely declarative.
 
 `theme/emoji.rb` then `theme/categories.rb` build the product categories —
 Signal, Session, Ignition and Keyflow, each with Feature Requests and

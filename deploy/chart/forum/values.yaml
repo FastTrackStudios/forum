@@ -79,6 +79,11 @@ redis:
   storageClass: local-path
   size: 2Gi
 
+# Category, emoji, form-template and tag seeding, as an Argo PostSync hook
+# rather than on every pod boot. See templates/seed-job.yaml.
+seed:
+  enabled: true
+
 # Nightly tarball of the uploads, on a 7-day ring, to a volume that is not
 # the one being backed up. See templates/backup.yaml for why Discourse's
 # own /admin/backups does not count.
