@@ -38,62 +38,64 @@ def upload(filename, type)
   end
 end
 
-archivo = upload("Archivo-latin.woff2", "theme_include")
+# Archivo is no longer uploaded here — it ships as a theme ASSET in
+# about.json, so Discourse uploads it and exposes the URL to the
+# stylesheet as $archivo. Only the site icon remains, because a logo is a
+# SITE setting rather than anything the theme owns.
 icon = upload("icon.png", "site_setting")
-log("uploads archivo=#{archivo&.url.inspect} icon=#{icon&.url.inspect}")
-
-# ── Colour scheme ────────────────────────────────────────────────────────
-# Greyscale, deliberately. Signal green / Session blue / Ignition amber /
-# Keyflow purple mean "this product" and nothing else — a forum serving all
-# of them gets none of them in its furniture.
-COLORS = {
-  # The room, darkest to lightest.
-  "secondary" => "0a0a0c", # page background   (--color-bg)
-  "primary" => "ededf1", # body text         (--color-fg)
-  "tertiary" => "ededf1", # links, accents    (--color-fg)
-  "quaternary" => "9c9ca8", # secondary accent  (--color-fg-muted)
-  "header_background" => "0a0a0c",
-  "header_primary" => "ededf1",
-  "highlight" => "26262f", # (--color-line)
-  "selected" => "16161c", # (--color-surface)
-  "hover" => "131318", # (--color-deck)
-  # The three states keep their meaning — a failed post must read as
-  # failed, and that is not a branding decision.
-  "danger" => "e04b4b",
-  "success" => "2fd673",
-  "love" => "ff8a2b",
-}.freeze
-
-scheme = ColorScheme.find_by(name: "FastTrackStudio")
-if scheme
-  COLORS.each do |name, hex|
-    c = scheme.colors.find_by(name: name)
-    c ? c.update!(hex: hex) : scheme.colors.create!(name: name, hex: hex)
-  end
-  scheme.save!
-else
-  scheme =
-    ColorScheme.create!(
-      name: "FastTrackStudio",
-      colors: COLORS.map { |name, hex| { name: name, hex: hex } },
-    )
-end
-log("scheme id=#{scheme.id} colors=#{scheme.colors.count}")
+log("uploads icon=#{icon&.url.inspect}")
 
 # ── Theme ────────────────────────────────────────────────────────────────
+# A real Discourse REMOTE THEME, imported from this repo's orphan `theme`
+# branch, rather than a theme this script builds field by field.
+#
+# That is the difference between Discourse hosting our stylesheet and
+# Discourse *managing* a theme: with a remote it tracks the upstream
+# commit, can check for and pull updates on its own schedule, shows the
+# source in /admin, and carries the colour scheme and the font asset from
+# about.json. None of that is true of a theme assembled by a script.
+#
+# The branch is orphan and published by theme/publish-theme.sh, because
+# Discourse requires about.json at the ROOT of the repo it clones and does
+# not support a subdirectory.
+THEME_REPO = "https://github.com/FastTrackStudios/forum.git"
+THEME_BRANCH = "theme"
+
 theme = Theme.find_by(name: "FastTrackStudio")
-theme ||= Theme.create!(name: "FastTrackStudio", user_id: Discourse.system_user.id)
-theme.color_scheme_id = scheme.id
-theme.user_selectable = true
-theme.save!
 
-scss = File.read(File.join(ASSETS, "common.scss"))
-scss = scss.sub("$ARCHIVO_URL", archivo&.url.to_s)
-theme.set_field(target: :common, name: :scss, value: scss)
-theme.save!
+if theme&.remote_theme.nil? && theme
+  # An earlier run built this by hand. Remove it so the remote import owns
+  # the name, rather than leaving two themes a maintainer has to tell
+  # apart in /admin.
+  log("removing the hand-built theme id=#{theme.id}")
+  theme.destroy!
+  theme = nil
+end
 
+if theme.nil?
+  theme = RemoteTheme.import_theme(THEME_REPO, Discourse.system_user, branch: THEME_BRANCH)
+  log("imported theme id=#{theme.id} from #{THEME_BRANCH}")
+else
+  theme.remote_theme.update_from_remote!
+  theme.save!
+  log("updated theme id=#{theme.id} commit=#{theme.remote_theme.remote_version.to_s[0, 8]}")
+end
+
+# Let Discourse pull later changes itself. This is the point of the whole
+# exercise: publishing the branch is enough, and nothing has to re-run
+# here for a stylesheet tweak to land.
+theme.remote_theme.update!(auto_update: true)
+
+theme.update!(user_selectable: true)
 theme.set_default!
-log("theme id=#{theme.id} default=#{theme.id == SiteSetting.default_theme_id} scss=#{scss.length}b")
+
+scheme = theme.color_schemes.first || ColorScheme.find_by(name: "FastTrackStudio")
+if scheme
+  theme.update!(color_scheme_id: scheme.id)
+  log("colour scheme id=#{scheme.id} name=#{scheme.name.inspect} colors=#{scheme.colors.count}")
+end
+
+log("theme id=#{theme.id} default=#{theme.id == SiteSetting.default_theme_id} auto_update=#{theme.remote_theme.auto_update}")
 
 # ── Identity ─────────────────────────────────────────────────────────────
 if icon

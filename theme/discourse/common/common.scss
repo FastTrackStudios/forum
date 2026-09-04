@@ -1,0 +1,194 @@
+/* FastTrackStudio forum theme.
+ *
+ * The voice is taken from fasttrackstudio.app, not reinvented here:
+ * src/styles/{theme,base,fonts}.css is the source of truth for the palette
+ * and the type roles, and this file is that system applied to Discourse's
+ * dense UI. When the site's tokens move, move these with them.
+ *
+ * Two rules carried over from the site, both deliberate:
+ *
+ *   1. CHROME IS GREYSCALE. The product colours — Signal green, Session
+ *      blue, Ignition amber, Keyflow purple — mean "this product" and
+ *      nothing else, ever. A forum serving all of them therefore gets no
+ *      product colour in its furniture. Hierarchy comes from weight,
+ *      spacing and rules instead.
+ *
+ *   2. NO CDN. Archivo ships as a theme ASSET (about.json), so Discourse
+ *      uploads it and hands this file the URL as $archivo. The site
+ *      self-hosts its fonts and keeps no external dependencies.
+ */
+
+/* ── Archivo ──────────────────────────────────────────────────────────
+   One family, two widths: a variable grotesque with a real width axis, so
+   display and body are the same voice at different settings. Condensed +
+   heavy reads as road-case stencil; normal width sets text. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  // $archivo is provided by Discourse from about.json's
+  // "assets" map — the upload URL, on this origin.
+  src: url($archivo) format("woff2");
+}
+
+:root {
+  --fts-void: #08080a;
+  --fts-bg: #0a0a0c;
+  --fts-deck: #131318;
+  --fts-surface: #16161c;
+  --fts-surface-raised: #1d1d25;
+  --fts-line: #26262f;
+  --fts-fg: #ededf1;
+  --fts-fg-muted: #9c9ca8;
+  --fts-fg-subtle: #63636f;
+
+  /* 2px. Not zero — the site's cards have a hairline radius, not square
+     corners — and never the pill shapes Discourse reaches for. */
+  --fts-radius: 2px;
+}
+
+html,
+body {
+  font-family: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Anything that should read as machine output: channel labels, versions,
+   patch lines — and, in a forum, the furniture around the writing. */
+.badge-wrapper .badge-category__name,
+.topic-list .num,
+.nav-pills > li > a,
+.btn,
+.discourse-tag {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  line-height: 1;
+}
+
+/* Display: condensed and heavy, stencil on a road case. Titles are the one
+   place the site shouts, so this is where the width axis earns its keep. */
+h1,
+h2,
+h3,
+.topic-title,
+.title-wrapper h1 {
+  font-weight: 800;
+  font-stretch: 76%;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+}
+
+/* Post titles stay sentence case — uppercasing user-written text mangles
+   code, names and anything non-Latin. Only the chrome shouts. */
+.topic-list .link-top-line .title {
+  font-stretch: 88%;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Furniture ───────────────────────────────────────────────────────── */
+
+.btn,
+.d-modal .modal-inner-container,
+.topic-list,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+textarea,
+.select-kit .select-kit-body,
+.select-kit-header {
+  border-radius: var(--fts-radius) !important;
+}
+
+/* Outlined, not filled, and it inverts on hover — the site's one button
+   shape. Discourse's default is a solid tertiary-coloured button, which
+   would put a colour in the chrome. */
+.btn-primary {
+  background: transparent;
+  border: 1px solid rgba(237, 237, 241, 0.7);
+  color: var(--fts-fg);
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+
+  &:hover,
+  &:focus {
+    background: var(--fts-fg);
+    border-color: var(--fts-fg);
+    color: var(--fts-void);
+  }
+}
+
+::selection {
+  background-color: #ffffff28;
+}
+
+/* A plain bright rule, so focus never competes with a product colour for
+   meaning. */
+:focus-visible {
+  outline: 2px solid var(--fts-fg);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/* Links carry their affordance as an underline rather than a hue, because
+   the accent here is the same near-white as the body text. */
+#main-outlet .cooked a:not(.mention):not(.hashtag-cooked),
+.topic-body .cooked a:not(.mention):not(.hashtag-cooked) {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--fts-fg-subtle);
+
+  &:hover {
+    text-decoration-color: var(--fts-fg);
+  }
+}
+
+/* ── Category badges ─────────────────────────────────────────────────
+   The four product categories carry their shipped app icon as a custom
+   emoji, so the BADGE is the icon everywhere a category is named.
+
+   Discourse sizes emoji to sit inside a line of prose, which is right for
+   :+1: in a post and far too small for a mark that has to be recognised
+   at a glance in a list — it computes to about 13px.
+
+   Scoped by the `fts_` name prefix rather than by `--style-emoji`, so the
+   stock categories keep their normal emoji: blowing up Site Feedback's
+   thought balloon to match is not the same intent.
+
+   The image is a direct child of `.badge-category` — there is no
+   `__icon` wrapper, which is why an earlier attempt at this silently
+   matched nothing. `!important` because Discourse sets the size in em on
+   `img.emoji` and also as width/height attributes on the element. */
+:root {
+  --fts-category-icon: 30px;
+}
+
+.badge-category > img.emoji[title^="fts_"],
+.sidebar-section-link-prefix img.emoji[title^="fts_"],
+.category-breadcrumb img.emoji[title^="fts_"] {
+  width: var(--fts-category-icon) !important;
+  height: var(--fts-category-icon) !important;
+  max-height: none !important;
+  object-fit: contain;
+  vertical-align: -0.32em;
+}
+
+/* The badge is a flex row in most places; without this the taller icon
+   stretches the row instead of sitting in it. */
+.badge-category__wrapper .badge-category,
+.category-list .badge-category {
+  align-items: center;
+}
+
+/* The header is the truss: a dark plate with a hairline under it. */
+.d-header {
+  background: var(--fts-bg);
+  border-bottom: 1px solid var(--fts-line);
+  box-shadow: none;
+}

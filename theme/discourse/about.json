@@ -1,0 +1,24 @@
+{
+  "name": "FastTrackStudio",
+  "about_url": "https://github.com/FastTrackStudios/forum",
+  "license_url": "https://github.com/FastTrackStudios/forum/blob/main/README.md",
+  "assets": {
+    "archivo": "assets/Archivo-latin.woff2"
+  },
+  "color_schemes": {
+    "FastTrackStudio": {
+      "secondary": "0a0a0c",
+      "primary": "ededf1",
+      "tertiary": "ededf1",
+      "quaternary": "9c9ca8",
+      "header_background": "0a0a0c",
+      "header_primary": "ededf1",
+      "highlight": "26262f",
+      "selected": "16161c",
+      "hover": "131318",
+      "danger": "e04b4b",
+      "success": "2fd673",
+      "love": "ff8a2b"
+    }
+  }
+}
