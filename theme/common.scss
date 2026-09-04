@@ -146,6 +146,22 @@ textarea,
   }
 }
 
+/* ── Category badges ─────────────────────────────────────────────────
+   The four product categories carry their shipped app icon as a custom
+   emoji, so the BADGE is the icon everywhere a category is named. This
+   sizes it to sit with the mono label beside it rather than towering
+   over it.
+
+   The one place a product colour is allowed in the furniture: a category
+   FOR Signal is Signal's identity, which is what the colour means. */
+.badge-category__icon img.emoji,
+.category-list .badge-category__icon img.emoji {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  vertical-align: -0.2em;
+}
+
 /* The header is the truss: a dark plate with a hairline under it. */
 .d-header {
   background: var(--fts-bg);

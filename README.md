@@ -192,6 +192,18 @@ kubectl -n forum exec -i deploy/forum --   env TMPDIR=/tmp/discourse bundle exec
 `TMPDIR` is required: `kubectl exec` starts a fresh process that does not
 inherit the one the entrypoint exports, and rake dies without it.
 
+`theme/emoji.rb` then `theme/categories.rb` build the product categories —
+Signal, Session, Ignition and Keyflow, each with Feature Requests and
+Support beneath it. Run emoji.rb FIRST and as its own process:
+`Category#emoji` is validated by `Emoji.exists?`, which reads a per-process
+memo, so an emoji created and assigned in one run fails validation for an
+emoji that provably exists a line earlier.
+
+The category badge is the app's shipped icon, registered as a custom emoji
+rather than a category logo. `style_type: "icon"` only accepts FontAwesome
+names, and a category *logo* renders as a full-width plate that buries the
+list — the emoji renders at badge size everywhere a category is named.
+
 The palette and type roles are lifted from `fasttrackstudio.app`'s
 `src/styles/{theme,base,fonts}.css` — that file is the source of truth, and
 these move when it moves. Archivo is uploaded to this forum and served from
