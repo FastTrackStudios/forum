@@ -67,8 +67,20 @@ PRODUCTS = [
 
 CHILDREN = [
   {
+    suffix: "discussions",
+    name: "Discussions",
+    # The middle level: neither asking for something nor reporting a
+    # fault, so it sits between the two tints rather than at either end.
+    tint: ["ededf1", 0.12],
+    type: nil,
+    description: ->(p) { "Everything else about #{p[:name]} — how people are using it, what they are building, and what it should become." },
+  },
+  {
     suffix: "feature-requests",
     name: "Feature Requests",
+    # Discourse category TYPE, from discourse-topic-voting: turns the
+    # category into an idea board where topics are voted on.
+    type: :ideas,
     # Lifted toward the house white: asking for something is the forward,
     # brighter half of the conversation.
     tint: ["ededf1", 0.34],
@@ -77,6 +89,9 @@ CHILDREN = [
   {
     suffix: "support",
     name: "Support",
+    # From discourse-solved: a reply can be marked as the answer, and the
+    # topic reads as solved or unsolved.
+    type: :support,
     # Settled back toward the deck. Still legible on the dark ground, but
     # it does not compete with the request category next to it.
     tint: ["131318", 0.30],
@@ -85,6 +100,40 @@ CHILDREN = [
 ].freeze
 
 admin = User.find_by(admin: true) || Discourse.system_user
+
+# ── Category types ───────────────────────────────────────────────────────
+# Discourse has a real notion of a category TYPE, contributed by plugins
+# and held in Categories::TypeRegistry. Both of the ones used here ship in
+# Discourse core but are OFF by default, and a type cannot be applied while
+# its plugin is disabled — `configure_category` would write a setting row
+# that nothing reads.
+#
+#   :ideas   -> discourse-topic-voting. Topics get votes, so the loudest
+#               request is visible rather than merely the most recent.
+#   :support -> discourse-solved. A reply can be marked as the answer and
+#               the topic reads solved / unsolved.
+#
+# enable_ideas_category_type_setup is what makes :ideas visible as a type
+# at all — without it the registry hides it and the admin UI never offers
+# it either.
+SiteSetting.topic_voting_enabled = true
+SiteSetting.solved_enabled = true
+SiteSetting.enable_ideas_category_type_setup = true
+
+def apply_type(category, type_id, admin)
+  return "plain" if type_id.nil?
+
+  klass = ::Categories::TypeRegistry.get(type_id)
+  return "MISSING(#{type_id})" if klass.nil?
+
+  klass.enable_plugin unless klass.plugin_enabled?
+  return "already:#{type_id}" if klass.category_matches?(category)
+
+  klass.configure_category(category, guardian: Guardian.new(admin))
+  type_id.to_s
+rescue => e
+  "FAILED(#{type_id}: #{e.class})"
+end
 
 def upsert(name:, slug:, color:, description:, parent: nil, admin:)
   scope = Category.where(slug: slug)
@@ -154,7 +203,7 @@ PRODUCTS.each do |product|
           parent: parent,
           admin: admin,
         )
-      "#{c.slug}=##{c.color}"
+      "#{c.slug}=##{c.color}/#{apply_type(c, child[:type], admin)}"
     end
 
   log("#{parent.name} ##{parent.color} style=#{parent.style_type}/#{parent.emoji.inspect} -> #{kids.join(" ")}")

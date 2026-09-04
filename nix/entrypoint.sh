@@ -115,11 +115,24 @@ fi
 # exists a line earlier — and Emoji.clear_cache does not help.
 #
 # Set FORUM_APPLY_THEME=0 to boot without touching any of it.
+# Runs in the BACKGROUND, after unicorn is told to start. Three Rails
+# boots is roughly two minutes, and blocking on them meant every restart —
+# including one triggered by toggling a plugin from the admin UI — took the
+# forum down for that whole window with a 502. The theme converging a
+# minute after the site is back is a far better trade than the site being
+# gone until the theme is perfect.
+#
+# The scripts are idempotent, so on an already-configured forum this is a
+# no-op that nobody sees. On a genuinely fresh database the first minute
+# looks like stock Discourse and then corrects itself.
 if [ "${FORUM_APPLY_THEME:-1}" = "1" ] && [ -d "${FORUM_THEME_DIR:-}" ]; then
-  echo "entrypoint: applying theme from $FORUM_THEME_DIR"
-  bundle exec rails runner "$FORUM_THEME_DIR/emoji.rb" || echo "entrypoint: emoji step failed, continuing"
-  bundle exec rails runner "$FORUM_THEME_DIR/apply.rb" || echo "entrypoint: theme step failed, continuing"
-  bundle exec rails runner "$FORUM_THEME_DIR/categories.rb" || echo "entrypoint: categories step failed, continuing"
+  (
+    echo "entrypoint: applying theme from $FORUM_THEME_DIR (background)"
+    bundle exec rails runner "$FORUM_THEME_DIR/emoji.rb" || echo "entrypoint: emoji step failed, continuing"
+    bundle exec rails runner "$FORUM_THEME_DIR/apply.rb" || echo "entrypoint: theme step failed, continuing"
+    bundle exec rails runner "$FORUM_THEME_DIR/categories.rb" || echo "entrypoint: categories step failed, continuing"
+    echo "entrypoint: theme applied"
+  ) &
 fi
 
 echo "entrypoint: starting unicorn (sidekiqs=${UNICORN_SIDEKIQS:-1})"
