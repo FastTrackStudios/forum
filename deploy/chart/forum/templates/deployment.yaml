@@ -78,6 +78,23 @@ spec:
             # upstream image sets the same cap.
             - name: MALLOC_ARENA_MAX
               value: "2"
+            # Dispose V8 contexts before forking instead of carrying them
+            # across. Discourse defaults this true, taking the branch in
+            # Discourse.before_fork that only sends low_memory_notification
+            # and KEEPS the contexts, trusting single-threaded V8 to
+            # survive fork. It does not survive it here: every pitchfork
+            # worker died on boot with
+            #   [BUG] Segmentation fault
+            #   mini_racer: v8::Context::Enter / v8_single_threaded_enter
+            # so /srv/status answered (it touches no JS) while any real
+            # page render killed the worker, forever, every 4-6 seconds.
+            #
+            # False takes the other branch, whose own comment reads "V8
+            # does not support forking, make sure all contexts are
+            # disposed"; each worker then builds a fresh context after
+            # fork. The cost is losing the pre-forked warm context.
+            - name: DISCOURSE_MINI_RACER_SINGLE_THREADED
+              value: "false"
 
             - name: DISCOURSE_DB_HOST
               value: {{ .Values.database.host | quote }}
