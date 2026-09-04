@@ -35,7 +35,14 @@ ingress:
 serveStaticAssets: true
 
 unicorn:
-  workers: 3
+  # TWO, sized to the node rather than to the app. starcommand is the
+  # always-on anchor and it is a 16 GB box that already runs the whole
+  # fleet — three pitchfork workers at ~400 MB each took it to 223 MB
+  # free and load average 30, and the kubelet started SIGTERMing this pod
+  # on a failed liveness probe. thebattleship has 195 GB, but it is the
+  # workstation and CI runner, not always-on: a public forum does not
+  # belong on a machine that sleeps.
+  workers: 2
   sidekiqs: 1
   timeout: 30
 
@@ -114,4 +121,7 @@ resources:
     cpu: 500m
     memory: 1Gi
   limits:
-    memory: 4Gi
+    # Below what the node can lose. A limit the node cannot honour is not
+    # a safety net — it just moves the failure from this pod to the
+    # kubelet and the apiserver, which is what happened at 4Gi.
+    memory: 2560Mi

@@ -157,12 +157,18 @@ spec:
               port: http
             failureThreshold: 60
             periodSeconds: 10
+          # Deliberately slack. Discourse under load answers /srv/status
+          # slowly rather than not at all, and a tight liveness probe
+          # turns "slow" into a restart loop that guarantees it never
+          # finishes warming up. Restart only after ~3 minutes of a
+          # genuinely unresponsive app.
           livenessProbe:
             httpGet:
               path: /srv/status
               port: http
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 15
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /srv/status
