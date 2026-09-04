@@ -160,10 +160,43 @@ PRODUCTS.each do |product|
   log("#{parent.name} ##{parent.color} style=#{parent.style_type}/#{parent.emoji.inspect} -> #{kids.join(" ")}")
 end
 
-# Subcategories are only visible on the categories page if the parent is
-# allowed to show them.
+# ── The landing page ─────────────────────────────────────────────────────
+# The front page IS the product list. Someone arriving here is almost
+# always here about one app — a bug in Ignition, a request for Signal — so
+# the first screen should be "which product", not a firehose of every
+# recent post across all of them.
+#
+# `subcategories_with_featured_topics` renders each parent WITH its
+# children and their recent topics, so Signal → Feature Requests / Support
+# and what is live in each is visible without a click. The alternatives
+# either hide the children (categories_only, categories_with_featured_topics)
+# or bury them under a global latest list (categories_and_latest_topics,
+# the Discourse default).
 SiteSetting.max_category_nesting = 3 if SiteSetting.max_category_nesting < 3
-SiteSetting.desktop_category_page_style = "categories_with_featured_topics"
+SiteSetting.desktop_category_page_style = "subcategories_with_featured_topics"
+SiteSetting.mobile_category_page_style = "subcategories_with_featured_topics"
+
+# top_menu's FIRST entry is the homepage. Categories leads; latest and the
+# rest stay reachable as tabs. "unread" is deliberately absent — it is
+# meaningless to a logged-out visitor, which is most of a public forum.
+SiteSetting.top_menu = "categories|latest|new|hot"
+
+# How many topics appear under each subcategory. FIVE is the floor —
+# Discourse validates this and raises Discourse::InvalidParameters
+# ("Value must be 5 or greater") for anything lower, which killed this
+# script partway through twice: once on 3 here, and once on
+# `category_featured_topics`, which no longer exists at all. Both left the
+# categories built and every setting below them untouched.
+SiteSetting.categories_topics = 5
+
+# ── The sidebar ──────────────────────────────────────────────────────────
+# The four products are pinned into every visitor's navigation menu, so
+# "which app am I here about" is answerable from anywhere without going
+# back to the front page. This is the DEFAULT for new and anonymous users;
+# anyone signed in can still edit their own.
+product_ids = PRODUCTS.map { |p| Category.find_by(slug: p[:slug], parent_category_id: nil)&.id }.compact
+SiteSetting.default_navigation_menu_categories = product_ids.join("|")
+log("sidebar categories=#{product_ids.inspect}")
 
 Emoji.clear_cache
 log("custom emoji=#{CustomEmoji.pluck(:name).join(",")}")

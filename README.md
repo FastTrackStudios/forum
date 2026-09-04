@@ -228,6 +228,34 @@ all of them gets none of them in its furniture — hierarchy comes from
 weight, spacing and rules. Only danger/success/love keep colour, because "your
 post failed" is not a branding decision.
 
+## Managing it
+
+Two ways in, for two different jobs.
+
+**The boot scripts** (above) are the source of truth for anything that must
+survive a rebuild. An API key configures a forum that already exists; only
+the image can bring one back from an empty database.
+
+**The REST API** is better for everything interactive or external — moving
+a topic, filing a bug from another service, poking at settings. It also
+fails legibly: a bad setting comes back as a 422 with a message, where a
+script dies partway and silently leaves everything after it unapplied
+(which happened twice here — `category_featured_topics` no longer exists,
+and `categories_topics` rejects anything below 5).
+
+The key lives at `starcommand/selfhost/apps/forum/discourse_api_key` in
+nix-secrets:
+
+```sh
+K=$(sops -d --output-type json ~/nix-secrets/sops/users/starcommand.yaml \
+     | jq -r .starcommand.selfhost.apps.forum.discourse_api_key)
+curl -H "Api-Key: $K" -H "Api-Username: cody" \
+     https://forum.fasttrackstudio.app/categories.json
+```
+
+Discourse reveals a key only at creation and stores a hash, so a lost value
+cannot be recovered — revoke it in `/admin/api/keys` and mint another.
+
 ## Deploying
 
 Argo CD syncs `deploy/chart/forum`. Image builds run on push to `main` (see
