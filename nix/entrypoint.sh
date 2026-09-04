@@ -90,7 +90,12 @@ printf '%s' "${FORUM_SITE_SETTINGS_JSON:-{\}}" > /run/discourse/config/nixos_sit
 if [ "${FORUM_RUN_MIGRATIONS:-1}" = "1" ]; then
   echo "entrypoint: running db:migrate"
   discourse-rake db:migrate
-  chmod -R u+w /var/lib/discourse/tmp/
+  # Best-effort. The NixOS unit owns this directory outright; here it is
+  # an emptyDir whose MOUNT ROOT belongs to root, so chmod on it fails
+  # with EPERM and, under `set -e`, killed the boot immediately after a
+  # successful migration. The files inside are ours — we created them —
+  # so there is nothing this needs to fix.
+  chmod -R u+w /var/lib/discourse/tmp/ 2>/dev/null || true
 fi
 
 # `themes:update` reaches out to git over the network for every installed

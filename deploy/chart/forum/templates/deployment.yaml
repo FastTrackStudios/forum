@@ -51,6 +51,11 @@ spec:
           env:
             - name: DISCOURSE_HOSTNAME
               value: {{ .Values.hostname | quote }}
+            # Whether this pod runs db:migrate at boot. Always true for a
+            # single-replica Deployment; the knob exists so a second pod
+            # (a sidekiq-only one, say) can be told not to race it.
+            - name: FORUM_RUN_MIGRATIONS
+              value: {{ .Values.runMigrations | ternary "1" "0" | quote }}
             - name: DISCOURSE_DEVELOPER_EMAILS
               value: {{ .Values.developerEmails | quote }}
             - name: DISCOURSE_SERVE_STATIC_ASSETS

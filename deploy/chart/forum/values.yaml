@@ -39,6 +39,10 @@ unicorn:
   sidekiqs: 1
   timeout: 30
 
+# Run db:migrate at boot. True in normal operation; an operator can turn
+# it off to bring the app up against a database that is already migrated.
+runMigrations: true
+
 # Emails auto-granted admin whenever an account with that address is
 # created — however it is created. This is what makes the account that
 # arrives through fts-auth an admin the moment it exists, instead of a
