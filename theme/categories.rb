@@ -306,7 +306,15 @@ end
   c = Category.find_by(slug: slug, parent_category_id: nil)
   next unless c
   c.update_column(:position, position += 1)
-  log("trailing #{slug} position=#{c.position}")
+
+  # If theme/emoji.rb registered an icon for it, use that. Only General
+  # has one — Site Feedback and Staff keep Discourse's stock emoji, which
+  # is the honest signal that they are Discourse's furniture and not ours.
+  emoji_name = "fts_#{slug}"
+  if Emoji.exists?(emoji_name)
+    c.update!(style_type: "emoji", emoji: emoji_name, uploaded_logo_id: nil)
+  end
+  log("trailing #{slug} position=#{c.position} emoji=#{c.emoji.inspect}")
 end
 
 # ── The landing page ─────────────────────────────────────────────────────

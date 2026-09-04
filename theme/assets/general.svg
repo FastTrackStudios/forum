@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- General: the same plate as every FastTrackStudio icon, lit white.
+
+       Built in the family language of apps/<product>/ios/icon.svg — dark
+       plate, ambient wash, a body gradient with a specular pass over it —
+       so it sits beside Session, Signal, Ignition and Keyflow as a
+       sibling rather than as a stock emoji.
+
+       GREYSCALE, and that is the whole point. The product colours mean
+       "this product" and nothing else, so a category that belongs to no
+       product gets the house white instead of borrowing a hue that would
+       imply one. -->
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232327"/>
+      <stop offset="0.55" stop-color="#151517"/>
+      <stop offset="1" stop-color="#0A0A0C"/>
+    </linearGradient>
+
+    <radialGradient id="ambient" cx="0.5" cy="0.5" r="0.62">
+      <stop offset="0" stop-color="#EDEDF1" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#EDEDF1" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- userSpaceOnUse, matching the product icons: one light direction
+         shared by every element, and safe on shapes with a zero-extent
+         bounding box. -->
+    <linearGradient id="body" gradientUnits="userSpaceOnUse"
+                    x1="180" y1="200" x2="860" y2="880">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.42" stop-color="#EDEDF1"/>
+      <stop offset="1" stop-color="#63636F"/>
+    </linearGradient>
+
+    <linearGradient id="spec" gradientUnits="userSpaceOnUse"
+                    x1="0" y1="250" x2="0" y2="790">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#plate)"/>
+  <rect width="1024" height="1024" fill="url(#ambient)"/>
+
+  <!-- A speech bubble, drawn heavy and wide so it still reads as one at
+       the 30px the category badge renders it. The tail is squared off
+       rather than curved — the house shapes have a 2px radius, not soft
+       corners. -->
+  <g>
+    <path d="M 232 296
+             H 792
+             A 56 56 0 0 1 848 352
+             V 640
+             A 56 56 0 0 1 792 696
+             H 456
+             L 312 800
+             V 696
+             H 232
+             A 56 56 0 0 1 176 640
+             V 352
+             A 56 56 0 0 1 232 296
+             Z"
+          fill="url(#body)"/>
+    <path d="M 232 296
+             H 792
+             A 56 56 0 0 1 848 352
+             V 640
+             A 56 56 0 0 1 792 696
+             H 456
+             L 312 800
+             V 696
+             H 232
+             A 56 56 0 0 1 176 640
+             V 352
+             A 56 56 0 0 1 232 296
+             Z"
+          fill="url(#spec)"/>
+
+    <!-- Three lines of "conversation". Sized to survive downscaling: at
+         badge size these read as texture rather than as strokes, which is
+         what stops the bubble looking like an empty blob. -->
+    <g fill="#0A0A0C" opacity="0.82">
+      <rect x="268" y="392" width="488" height="44" rx="8"/>
+      <rect x="268" y="474" width="396" height="44" rx="8"/>
+      <rect x="268" y="556" width="292" height="44" rx="8"/>
+    </g>
+  </g>
+</svg>

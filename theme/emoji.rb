@@ -15,7 +15,10 @@
 ASSETS = ENV.fetch("FORUM_THEME_DIR", "/tmp/fts-theme")
 admin = User.find_by(admin: true) || Discourse.system_user
 
-%w[signal session ignition keyflow].each do |slug|
+# The four products, plus General — which is not a product, and whose
+# icon is therefore greyscale (theme/assets/general.svg). Discourse's
+# stock blue_book was the only badge on the page that was not ours.
+%w[signal session ignition keyflow general].each do |slug|
   name = "fts_#{slug}"
   path = File.join(ASSETS, "cat-#{slug}.png")
   next STDOUT.puts("RESULT #{name} SKIP (no #{path})") unless File.exist?(path)
