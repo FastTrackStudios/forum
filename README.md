@@ -84,6 +84,33 @@ own tree, which here is the read-only Nix store. It is a warning, not a
 failure — the NixOS module has the same layout — and it only affects bundled
 plugins that are not enabled.
 
+**mini_racer does not survive the fork here**, and this is the one that cost
+the most. Discourse defaults `mini_racer_single_threaded = true`, which takes
+the branch in `Discourse.before_fork` that only sends `low_memory_notification`
+and *keeps* the V8 contexts, trusting single-threaded V8 across `fork()`. In
+this build it does not survive: every pitchfork worker died with
+
+```
+[BUG] Segmentation fault
+mini_racer_extension.so(v8::Context::Enter)
+mini_racer_extension.so(v8_single_threaded_enter)
+```
+
+The deployment therefore sets `DISCOURSE_MINI_RACER_SINGLE_THREADED=false`,
+taking the other branch — whose own comment reads *"V8 does not support
+forking, make sure all contexts are disposed"* — so each worker builds a fresh
+context after fork.
+
+The symptom is worth remembering because it is so misleading: `/srv/status`
+kept answering 200, since it touches no JavaScript. The pod looked healthy
+while every real page render killed a worker, which respawned every 4-6
+seconds forever, and the homepage simply never returned.
+
+**`force_https` is not optional.** Caddy terminates TLS and forwards plain
+HTTP, so without it Discourse builds `http://` URLs — including the OAuth
+`redirect_uri`, which the issuer refuses as unregistered before drawing a
+login page. It is pinned in the cluster module's site settings.
+
 One container, not two: `unicorn_launcher` supervises both unicorn and the
 sidekiq workers, so `UNICORN_SIDEKIQS` is the knob rather than a second
 Deployment. That is also why `replicaCount` is 1 and not a scaling dial — two
