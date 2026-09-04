@@ -65,6 +65,19 @@ container. `nix/entrypoint.sh` is that unit's `RuntimeDirectory` +
 `StateDirectory` + `preStart`, rewritten for a pod. **When bumping nixpkgs,
 diff `nixos/modules/services/web-apps/discourse.nix` against it.**
 
+`nixos_site_settings.json` is the sharp edge. nixpkgs *patches* Discourse to
+load that file as an extra site-settings source, and a missing file is fatal
+before any migration runs (`URGENT: Failed to initialize site default:
+Errno::ENOENT`). The NixOS unit writes it in `preStart`, so nothing upstream
+ever meets it absent. The entrypoint writes it from the chart's
+`siteSettings` value.
+
+You will also see `Permission denied @ dir_s_mkdir` for a plugin's `public`
+directory at boot. Discourse tries to create plugin asset symlinks inside its
+own tree, which here is the read-only Nix store. It is a warning, not a
+failure — the NixOS module has the same layout — and it only affects bundled
+plugins that are not enabled.
+
 One container, not two: `unicorn_launcher` supervises both unicorn and the
 sidekiq workers, so `UNICORN_SIDEKIQS` is the knob rather than a second
 Deployment. That is also why `replicaCount` is 1 and not a scaling dial — two

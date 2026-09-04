@@ -51,6 +51,21 @@ ln -sfn /var/lib/discourse/backups /run/discourse/public/backups
 # Discourse generates images into this directory; the dist copy is u=rx.
 chmod 750 /run/discourse/public/images
 
+# ── Site settings ────────────────────────────────────────────────────────
+# nixpkgs PATCHES Discourse to load this file as an extra site-settings
+# source (app/models/site_setting.rb -> SiteSettings::YamlLoader), and it
+# is not optional: a missing file is a hard
+#   URGENT: Failed to initialize site default:
+#   Errno::ENOENT ... config/nixos_site_settings.json
+# before any migration runs. The NixOS unit generates it in preStart, so
+# nothing upstream ever sees it absent.
+#
+# Shape is { category = { setting = value; } }, e.g.
+#   {"login":{"enable_local_logins":false}}
+# `{}` is the valid empty form. FORUM_SITE_SETTINGS_JSON lets the chart
+# supply settings without rebuilding the image.
+printf '%s' "${FORUM_SITE_SETTINGS_JSON:-{\}}" > /run/discourse/config/nixos_site_settings.json
+
 # ── Migrations ───────────────────────────────────────────────────────────
 # Guarded by an env flag rather than run unconditionally: the Deployment is
 # a single replica today, but a second one racing `db:migrate` corrupts the

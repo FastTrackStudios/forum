@@ -39,6 +39,13 @@ unicorn:
   sidekiqs: 1
   timeout: 30
 
+# Site settings forced at every boot, as { category: { setting: value } }.
+# Empty by default: anything named here is pinned, and an operator editing
+# it in /admin would find the change silently reverted on the next restart.
+# Prefer /admin for anything that is genuinely a preference; use this for
+# settings a rebuilt-from-scratch forum must come up with.
+siteSettings: {}
+
 database:
   host: pg-main-rw.databases.svc
   port: 5432

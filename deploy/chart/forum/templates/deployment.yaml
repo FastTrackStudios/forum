@@ -53,6 +53,13 @@ spec:
               value: {{ .Values.hostname | quote }}
             - name: DISCOURSE_SERVE_STATIC_ASSETS
               value: {{ .Values.serveStaticAssets | quote }}
+            # Site settings applied at boot, shape { category: { setting:
+            # value } }. nixpkgs patches Discourse to read these from
+            # config/nixos_site_settings.json, which the entrypoint writes
+            # from this value. Settings named here are pinned: editing them
+            # in /admin will not stick across a restart.
+            - name: FORUM_SITE_SETTINGS_JSON
+              value: {{ .Values.siteSettings | toJson | quote }}
 
             - name: UNICORN_WORKERS
               value: {{ .Values.unicorn.workers | quote }}
