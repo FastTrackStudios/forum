@@ -36,7 +36,14 @@ spec:
           type: RuntimeDefault
       containers:
         - name: forum
-          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          # argocd-image-updater writes the FULL reference back into
+          # image.repository (registry included), so prefixing
+          # image.registry unconditionally yields
+          #   registry.starcommand.live:30050/registry.starcommand.live:30050/forum
+          # and the pod sits in InvalidImageName. Only prefix when the
+          # repository is bare. The sibling fts-auth and task charts hit
+          # this first; this chart was copied from fts-auth before its fix.
+          image: "{{ if contains "/" .Values.image.repository }}{{ .Values.image.repository }}{{ else }}{{ .Values.image.registry }}/{{ .Values.image.repository }}{{ end }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
