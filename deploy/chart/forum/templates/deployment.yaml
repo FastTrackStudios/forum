@@ -51,6 +51,8 @@ spec:
           env:
             - name: DISCOURSE_HOSTNAME
               value: {{ .Values.hostname | quote }}
+            - name: DISCOURSE_DEVELOPER_EMAILS
+              value: {{ .Values.developerEmails | quote }}
             - name: DISCOURSE_SERVE_STATIC_ASSETS
               value: {{ .Values.serveStaticAssets | quote }}
             # Site settings applied at boot, shape { category: { setting:
