@@ -183,6 +183,79 @@ def upsert(name:, slug:, color:, description:, parent: nil, admin:)
   category
 end
 
+# ── Form templates ───────────────────────────────────────────────────────
+# A bug report that arrives without a version, a platform or steps costs a
+# round trip before anyone can even start. These make the composer ask, so
+# the first post already contains what a maintainer needs.
+#
+# Only the two typed categories get one. Discussions deliberately has none:
+# a template on open conversation is a barrier, not a help.
+#
+# Field rules, from FormTemplateYamlValidator: every field needs a `type`
+# (checkbox, dropdown, input, multi-select, textarea, upload, tag-chooser,
+# composer) and a unique `id`.
+TEMPLATES = {
+  "FTS Support" => [
+    { "type" => "dropdown", "id" => "platform", "choices" => ["macOS", "Windows", "Linux"],
+      "attributes" => { "label" => "Platform", "required" => true } },
+    { "type" => "input", "id" => "version",
+      "attributes" => { "label" => "Version", "required" => true,
+                        "placeholder" => "e.g. 0.4.2, or a build date" } },
+    { "type" => "textarea", "id" => "what-happened",
+      "attributes" => { "label" => "What happened?", "required" => true,
+                        "description" => "What you saw, and what you expected instead." } },
+    { "type" => "textarea", "id" => "steps",
+      "attributes" => { "label" => "Steps to reproduce",
+                        "description" => "The shortest sequence that shows the problem. If it is intermittent, say so." } },
+    { "type" => "upload", "id" => "attachments", "attributes" => { "label" => "Screenshots or logs" } },
+  ],
+  "FTS Feature Request" => [
+    { "type" => "textarea", "id" => "goal",
+      "attributes" => { "label" => "What are you trying to do?", "required" => true,
+                        "description" => "The problem, not the solution. This is the part that decides whether an idea gets built." } },
+    { "type" => "textarea", "id" => "proposal",
+      "attributes" => { "label" => "What would you like to see?" } },
+    { "type" => "textarea", "id" => "workaround",
+      "attributes" => { "label" => "How do you handle it today?",
+                        "description" => "Existing workarounds tell us how much this hurts." } },
+  ],
+}.freeze
+
+template_ids = {}
+TEMPLATES.each do |name, fields|
+  ft = FormTemplate.find_by(name: name) || FormTemplate.new(name: name)
+  ft.template = fields.to_yaml
+  ft.save!
+  template_ids[name] = ft.id
+end
+log("form templates=#{template_ids.inspect}")
+
+# ── Tags ─────────────────────────────────────────────────────────────────
+# Categories are per-PRODUCT; tags are per-CONCERN. Without them there is
+# no way to ask "every audio crash on Windows" across Signal and Session,
+# because the two live in different category trees.
+#
+# Deliberately few and closed. An open tag field on a public forum becomes
+# a thousand one-use tags within a month, and then means nothing.
+TAG_GROUPS = {
+  "Platform" => %w[macos windows linux],
+  "Release" => %w[stable beta nightly],
+}.freeze
+
+TAG_GROUPS.each do |group_name, tag_names|
+  tags = tag_names.map { |t| Tag.find_by_name(t) || Tag.create!(name: t) }
+  group = TagGroup.find_by(name: group_name) || TagGroup.create!(name: group_name)
+  group.tags = tags
+  group.save!
+end
+log("tag groups=#{TagGroup.pluck(:name).inspect}")
+
+# Which template each category TYPE gets. Discussions (nil) gets none.
+TEMPLATE_FOR = {
+  support: template_ids["FTS Support"],
+  ideas: template_ids["FTS Feature Request"],
+}.freeze
+
 # Discourse only honours `position` when told to; left alone it orders
 # categories by activity, which would shuffle these three around as people
 # post. The order here is the shape of the conversation — talk about it,
@@ -214,6 +287,9 @@ PRODUCTS.each do |product|
           admin: admin,
         )
       c.update_column(:position, position += 1)
+      if (tid = TEMPLATE_FOR[child[:type]])
+        c.update!(form_template_ids: [tid])
+      end
       "#{c.slug}=##{c.color}/#{apply_type(c, child[:type], admin)}"
     end
 

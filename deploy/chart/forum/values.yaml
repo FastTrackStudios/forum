@@ -79,6 +79,17 @@ redis:
   storageClass: local-path
   size: 2Gi
 
+# Nightly tarball of the uploads, on a 7-day ring, to a volume that is not
+# the one being backed up. See templates/backup.yaml for why Discourse's
+# own /admin/backups does not count.
+backup:
+  enabled: true
+  schedule: "20 4 * * *"
+  storageClass: nas-nfs
+  size: 20Gi
+  # Only needs tar, date and sh.
+  image: docker.io/library/alpine:3.21
+
 storage:
   # Uploads and backups — the only forum data that is not in Postgres.
   # NFS because it must outlive the node; Postgres deliberately does not

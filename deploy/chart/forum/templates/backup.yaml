@@ -1,0 +1,92 @@
+{{- if .Values.backup.enabled }}
+# Uploads are the only data here that a database dump cannot bring back.
+# Postgres gets a nightly pg_dumpall to the NAS from the cluster's
+# `databases` service; this is the other half.
+#
+# Discourse's own /admin/backups is NOT this. It writes into the same
+# volume it is backing up, so it survives an application mistake and
+# nothing else — not a bad NFS day, not an `rm`, not a PVC delete.
+#
+# Dated by weekday, so it self-rotates on a 7-day ring without needing a
+# prune job: day 3 overwrites last week's day 3.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: forum-backups
+  annotations:
+    # This is the copy of last resort. A render bug must never delete it.
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.backup.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.size }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: forum-uploads-backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A backup that quietly fails forever is worse than none, because it
+      # is believed. Fail loudly instead of retrying into the next run.
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: {{ .Values.backup.image | quote }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  day=$(date +%w)
+                  out="/backups/forum-uploads-${day}.tar.gz"
+                  echo "backing up uploads -> ${out}"
+                  # Written to a temp name and moved into place, so an
+                  # interrupted run cannot leave a truncated archive
+                  # sitting where a good one used to be.
+                  tar czf "${out}.partial" -C /var/lib/discourse uploads
+                  mv "${out}.partial" "${out}"
+                  ls -lh /backups/
+                  echo "done"
+              volumeMounts:
+                - name: state
+                  mountPath: /var/lib/discourse
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: state
+              persistentVolumeClaim:
+                claimName: forum-state
+            - name: backups
+              persistentVolumeClaim:
+                claimName: forum-backups
+{{- end }}

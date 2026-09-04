@@ -110,5 +110,17 @@ SiteSetting.interface_color_selector = "disabled" if SiteSetting.respond_to?(:in
 SiteSetting.title = "FastTrackStudio"
 SiteSetting.site_description = "Audio-visual software for live performance and production"
 
+# Both appear on /about and in system mail, and both were empty. An
+# unattributed forum with no way to reach anyone reads as abandoned, and
+# once the doors are open they are a legal expectation as much as a
+# courtesy.
+SiteSetting.contact_email = "info@fasttrackstudio.app"
+SiteSetting.company_name = "FastTrackStudio"
+
+# No default. With a category per product and three kinds of conversation
+# under each, the composer should make someone choose rather than quietly
+# filing everything into General.
+SiteSetting.default_composer_category = ""
+
 log("identity logo=#{SiteSetting.logo&.url.inspect} title=#{SiteSetting.title.inspect}")
 log("DONE")
