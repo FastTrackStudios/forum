@@ -35,12 +35,23 @@ let
     echo 'root:x:0:' >> $out/etc/group
   '';
 
+  # Matches the CNPG cluster's server major (ghcr.io/cloudnative-pg/postgresql:16).
+  # Only the client is used.
+  psql = pkgs.postgresql_16;
+
   entrypoint = pkgs.writeShellApplication {
     name = "forum-entrypoint";
     runtimeInputs = [
       pkgs.coreutils
       discourse.rake
       discourse.rubyEnv
+      # `db:migrate` on an EMPTY database does not run migrations — it
+      # loads db/structure.sql by shelling out to `psql`, and without it
+      # the first boot dies with
+      #   failed to execute: psql --set ON_ERROR_STOP=1 ... structure.sql
+      # discourse.runtimeDeps does not carry it: the NixOS module gets a
+      # client from services.postgresql on the same host.
+      psql
     ];
     text = builtins.readFile ./entrypoint.sh;
   };
@@ -54,6 +65,7 @@ pkgs.dockerTools.streamLayeredImage {
     discourse.rubyEnv
     entrypoint
     passwd
+    psql
     pkgs.bashInteractive
     pkgs.coreutils
     # TLS roots: Discourse talks to Postgres, SMTP and the OAuth2 provider

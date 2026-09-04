@@ -72,6 +72,12 @@ Errno::ENOENT`). The NixOS unit writes it in `preStart`, so nothing upstream
 ever meets it absent. The entrypoint writes it from the chart's
 `siteSettings` value.
 
+The image also carries a **postgres client**. `db:migrate` against an empty
+database does not run migrations at all — it loads `db/structure.sql` by
+shelling out to `psql`. `discourse.runtimeDeps` does not include it, because
+the NixOS module gets a client from `services.postgresql` on the same host,
+and a container has no such neighbour.
+
 You will also see `Permission denied @ dir_s_mkdir` for a plugin's `public`
 directory at boot. Discourse tries to create plugin asset symlinks inside its
 own tree, which here is the read-only Nix store. It is a warning, not a
