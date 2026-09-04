@@ -192,26 +192,31 @@ kubectl -n forum exec -i deploy/forum --   env TMPDIR=/tmp/discourse bundle exec
 `TMPDIR` is required: `kubectl exec` starts a fresh process that does not
 inherit the one the entrypoint exports, and rake dies without it.
 
-**The theme is part of the image, and applied on DEPLOY — not on boot.**
-`theme/` is copied into the store by `nix/image.nix` and exposed as
-`FORUM_THEME_DIR`. An Argo CD **PostSync hook Job** runs the same image
-with `FORUM_MODE=seed`, which builds the runtime scaffolding, runs the
-three scripts, and exits.
+**The theme manages itself.** `theme/discourse/` is a real Discourse theme —
+`about.json`, `common/common.scss`, and Archivo as a theme **asset** (which
+Discourse uploads and hands the stylesheet as `$archivo`, so the font is
+served from this origin and no CDN is involved). `about.json` also carries
+the colour scheme.
 
-It used to run in the entrypoint on every pod boot. That was wrong twice
-over: it coupled "the site is up" to "configuration has converged" — so
-enabling two plugins took the forum down for three minutes — and it re-ran
-identical work on every unrelated restart. Configuration changes on
-deploy, so it converges on deploy.
+It is published to the orphan **`theme` branch** by `theme/publish-theme.sh`,
+because Discourse requires `about.json` at the root of the repo it clones and
+does not support a subdirectory. Discourse imports it as a *remote theme* with
+`auto_update` on, so it tracks the branch, checks for updates on its own
+schedule, and shows the source in `/admin`. **Changing the stylesheet means
+publishing the branch — nothing here has to re-run.**
 
-Seed mode shares `entrypoint.sh` rather than re-implementing the
-scaffolding, because everything the scripts need (the config tree from
-`config.dist`, `nixos_site_settings.json`, a TMPDIR Ruby will accept) is
-built there, and a second copy would drift.
+What is left needing a script is category structure, custom emoji, form
+templates and tags, for which Discourse has no declarative form at all. That
+runs as an Argo CD **PostSync hook Job** — the same image with
+`FORUM_MODE=seed`, once per deploy.
 
-Site settings are separate and need no script at all: nixpkgs patches
-Discourse to read `nixos_site_settings.json`, so the chart's
-`siteSettings` value is genuinely declarative.
+It used to run in the entrypoint on every pod boot, which coupled "the site is
+up" to "configuration has converged": enabling two plugins took the forum down
+for three minutes, and every unrelated restart re-ran identical work.
+
+Site settings need no script either — nixpkgs patches Discourse to read
+`nixos_site_settings.json`, so the chart's `siteSettings` value is genuinely
+declarative.
 
 `theme/emoji.rb` then `theme/categories.rb` build the product categories —
 Signal, Session, Ignition and Keyflow, each with Feature Requests and

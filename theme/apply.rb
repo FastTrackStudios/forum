@@ -76,7 +76,9 @@ if theme.nil?
   theme = RemoteTheme.import_theme(THEME_REPO, Discourse.system_user, branch: THEME_BRANCH)
   log("imported theme id=#{theme.id} from #{THEME_BRANCH}")
 else
-  theme.remote_theme.update_from_remote!
+  # `update_from_remote`, not `update_from_remote!` — this model has no
+  # bang variant, and calling one aborts the whole run.
+  theme.remote_theme.update_from_remote
   theme.save!
   log("updated theme id=#{theme.id} commit=#{theme.remote_theme.remote_version.to_s[0, 8]}")
 end
@@ -84,7 +86,9 @@ end
 # Let Discourse pull later changes itself. This is the point of the whole
 # exercise: publishing the branch is enough, and nothing has to re-run
 # here for a stylesheet tweak to land.
-theme.remote_theme.update!(auto_update: true)
+# Note: auto_update lives on Theme, not on RemoteTheme — the remote row
+# holds the URL, branch and version, the theme holds the policy.
+theme.update!(auto_update: true)
 
 theme.update!(user_selectable: true)
 theme.set_default!
@@ -95,7 +99,7 @@ if scheme
   log("colour scheme id=#{scheme.id} name=#{scheme.name.inspect} colors=#{scheme.colors.count}")
 end
 
-log("theme id=#{theme.id} default=#{theme.id == SiteSetting.default_theme_id} auto_update=#{theme.remote_theme.auto_update}")
+log("theme id=#{theme.id} default=#{theme.id == SiteSetting.default_theme_id} auto_update=#{theme.auto_update} branch=#{theme.remote_theme.branch}")
 
 # ── Identity ─────────────────────────────────────────────────────────────
 if icon
